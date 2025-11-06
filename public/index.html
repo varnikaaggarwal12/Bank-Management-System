@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Banking App</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Welcome to Our Bank</h1>
+    <p>Please choose an option below to proceed:</p>
+
+    <!-- Navigation Buttons -->
+    <div class="options">
+      <button onclick="showSection('login')">Login</button>
+      <button onclick="showSection('open')">Open Account</button>
+      <button onclick="showSection('deposit')">Deposit</button>
+      <button onclick="showSection('withdraw')">Withdraw</button>
+      <button onclick="showSection('transfer')">Transfer</button>
+      <button onclick="showSection('update')">Update PIN</button>
+      <button onclick="showSection('delete')">Delete Account</button>
+      <button onclick="showSection('history')">Transaction History</button>
+    </div>
+
+    <!-- Sections -->
+    <div id="login" class="section">
+      <h2>Login</h2>
+      <input id="loginAcc" placeholder="Account Number">
+      <input id="loginPin" placeholder="PIN">
+      <button onclick="login()">Login</button>
+    </div>
+
+    <div id="open" class="section">
+      <h2>Open Account</h2>
+      <input id="name" placeholder="Name">
+      <input id="pin" placeholder="PIN">
+      <button onclick="openAccount()">Open Account</button>
+    </div>
+
+    <div id="deposit" class="section">
+      <h2>Deposit</h2>
+      <input id="depAmt" placeholder="Amount">
+      <button onclick="deposit()">Deposit</button>
+    </div>
+
+    <div id="withdraw" class="section">
+      <h2>Withdraw</h2>
+      <input id="withAmt" placeholder="Amount">
+      <button onclick="withdraw()">Withdraw</button>
+    </div>
+
+    <div id="transfer" class="section">
+      <h2>Transfer</h2>
+      <input id="toAcc" placeholder="To Account Number">
+      <input id="transAmt" placeholder="Amount">
+      <button onclick="transfer()">Transfer</button>
+    </div>
+
+    <div id="update" class="section">
+      <h2>Update PIN</h2>
+      <input id="newPin" placeholder="New PIN">
+      <button onclick="updatePin()">Update PIN</button>
+    </div>
+
+    <div id="delete" class="section">
+      <h2>Delete Account</h2>
+      <button onclick="deleteAccount()">Delete Account</button>
+    </div>
+
+    <div id="history" class="section">
+      <h2>Transaction History</h2>
+      <ul id="transList"></ul>
+      <p id="transError" style="color:red;"></p>
+    </div>
+  </div>
+
+  <script>
+    let token = ''; // JWT token stored after login
+    const API = '/api/account';
+
+    // Show only selected section
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
+      if (id) {
+        document.getElementById(id).style.display = 'block';
+
+        // Load transactions if history section
+        if (id === 'history') getTransactions();
+      }
+    }
+
+    // Login
+    async function login() {
+      const accountNumber = document.getElementById('loginAcc').value;
+      const pin = document.getElementById('loginPin').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountNumber, pin })
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          alert('Login failed: ' + text);
+          return;
+        }
+
+        const data = await res.json();
+        token = data.token;
+        alert('Login successful');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Open Account
+    async function openAccount() {
+      try {
+        const res = await fetch(`${API}/open`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: document.getElementById('name').value,
+            pin: document.getElementById('pin').value
+          })
+        });
+        const msg = await res.text();
+        alert(msg);
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Deposit
+    async function deposit() {
+      if (!token) return alert('Please login first');
+      try {
+        const res = await fetch(`${API}/deposit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ amount: document.getElementById('depAmt').value })
+        });
+        alert(await res.text());
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Withdraw
+    async function withdraw() {
+      if (!token) return alert('Please login first');
+      try {
+        const res = await fetch(`${API}/withdraw`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ amount: document.getElementById('withAmt').value })
+        });
+        alert(await res.text());
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Transfer
+    async function transfer() {
+      if (!token) return alert('Please login first');
+      try {
+        const res = await fetch(`${API}/transfer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({
+            toAccountNumber: document.getElementById('toAcc').value,
+            amount: document.getElementById('transAmt').value
+          })
+        });
+        alert(await res.text());
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Update PIN
+    async function updatePin() {
+      if (!token) return alert('Please login first');
+      try {
+        const res = await fetch(`${API}/update-pin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ newPin: document.getElementById('newPin').value })
+        });
+        alert(await res.text());
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Delete Account
+    async function deleteAccount() {
+      if (!token) return alert('Please login first');
+      try {
+        const res = await fetch(`${API}/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+        });
+        alert(await res.text());
+        token = '';
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Transaction History
+    async function getTransactions() {
+      if (!token) return alert('Please login first');
+
+      const list = document.getElementById('transList');
+      const errorEl = document.getElementById('transError');
+      list.innerHTML = '';
+      errorEl.textContent = '';
+
+      try {
+        const res = await fetch('/api/transactions', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          errorEl.textContent = 'Error: ' + text;
+          return;
+        }
+
+        const data = await res.json();
+
+        if (!data.length) {
+          list.innerHTML = '<li>No transactions found</li>';
+          return;
+        }
+
+        data.forEach(t => {
+          const li = document.createElement('li');
+          li.textContent = `${new Date(t.date).toLocaleString()} - ${t.type.toUpperCase()} - ${t.amount}${t.toAccount ? ' to ' + t.toAccount : ''}`;
+          list.appendChild(li);
+        });
+      } catch (err) {
+        errorEl.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    // Hide all sections initially
+    showSection('');
+  </script>
+</body>
+</html>

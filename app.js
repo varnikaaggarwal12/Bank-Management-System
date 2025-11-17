@@ -1,46 +1,50 @@
-// app.js
-const express = require("express");
-const path = require("path");
-const dotenv = require("dotenv");
-const { PrismaClient } = require("@prisma/client");
+// index.js
+require('dotenv').config();
+const http = require('http');
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
 
-dotenv.config();
+const { connectDB } = require('./config/db');
+const accountRoutes = require('./routes/accountRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
+const { sub } = require('./services/pubsub'); // ensure pub/sub instantiated
 
 const app = express();
-const prisma = new PrismaClient();
-
-// Middleware
 app.use(express.json());
-app.use(express.static("public")); // ✅ serves index.html, CSS, JS
+app.use(cors());
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
-const authRoutes = require("./routes/authRoutes");
-const accountRoutes = require("./routes/accountRoutes");
-const transactionRoutes = require("./routes/transactionRoutes");
+app.use('/api/accounts', accountRoutes);
+app.use('/api/transactions', transactionRoutes);
 
-// Use routes
-app.use("/api/auth", authRoutes);
-app.use("/api/accounts", accountRoutes);
-app.use("/api/transactions", transactionRoutes);
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ✅ Serve your main HTML page at root
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+const server = http.createServer(app);
+
+const { Server } = require('socket.io');
+const io = new Server(server, { cors: { origin: '*' } });
+
+// expose globally for pubsub to emit
+global.io = io;
+
+io.on('connection', (socket) => {
+  console.log('Socket connected', socket.id);
+
+  // join account room if client provides accountNumber after connecting
+  socket.on('joinAccount', (accountNumber) => {
+    if (accountNumber) socket.join(`account:${accountNumber}`);
+  });
+
+  socket.on('leaveAccount', (accountNumber) => {
+    if (accountNumber) socket.leave(`account:${accountNumber}`);
+  });
+
+  socket.on('disconnect', () => console.log('Socket disconnected', socket.id));
 });
 
-// Connect to PostgreSQL via Prisma
-async function connectDB() {
-  try {
-    await prisma.$connect();
-    console.log("✅ Connected to PostgreSQL via Prisma");
-  } catch (error) {
-    console.error("❌ Database connection failed:", error);
-  }
-}
-connectDB();
-
-// Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
+// Connect DB then start
+connectDB().then(() => {
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+}).catch(err => console.error(err));

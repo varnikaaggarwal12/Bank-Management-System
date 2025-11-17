@@ -1,303 +1,186 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-require("dotenv").config();
+// controllers/accountController.js
+const { prisma } = require('../config/db');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { pub } = require('../services/pubsub');
+require('dotenv').config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey"; // fallback if .env missing
+const JWT_SECRET = process.env.JWT_SECRET;
 
-// ✅ OPEN ACCOUNT
 exports.openAccount = async (req, res) => {
   try {
     const { name, pin } = req.body;
-
-    if (!name || !pin) {
-      return res.status(400).json({ message: "Name and PIN are required" });
-    }
+    if (!name || !pin) return res.status(400).json({ message: 'Name and PIN required' });
 
     const accountNumber = Math.floor(100000 + Math.random() * 900000).toString();
-    const hashedPin = await bcrypt.hash(pin, 10);
+    const hashed = await bcrypt.hash(pin, 10);
 
-    const account = await prisma.account.create({
-      data: {
-        name: name.trim(),
-        accountNumber,
-        pin: hashedPin,
-        balance: 0,
-      },
+    const acc = await prisma.account.create({
+      data: { name: name.trim(), pin: hashed, accountNumber, balance: 0 }
     });
 
-    res.status(201).json({
-      message: "Account created successfully",
-      accountNumber: account.accountNumber,
-    });
-  } catch (error) {
-    console.error("Error creating account:", error);
-    res.status(500).json({ message: "Server error creating account" });
+    res.status(201).json({ message: 'Account created', accountNumber: acc.accountNumber });
+  } catch (err) {
+    console.error('openAccount error', err.message);
+    res.status(500).json({ message: 'Server error creating account' });
   }
 };
 
-// ✅ LOGIN
 exports.login = async (req, res) => {
   try {
     const { accountNumber, pin } = req.body;
+    const acc = await prisma.account.findUnique({ where: { accountNumber: String(accountNumber).trim() } });
+    if (!acc) return res.status(401).json({ message: 'Account not found' });
 
-    const account = await prisma.account.findUnique({
-      where: { accountNumber: String(accountNumber).trim() },
-    });
+    const match = await bcrypt.compare(String(pin), acc.pin);
+    if (!match) return res.status(401).json({ message: 'Invalid credentials' });
 
-    if (!account) return res.status(401).json({ message: "Account not found" });
-
-    const isMatch = await bcrypt.compare(String(pin).trim(), account.pin);
-    if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
-
-    const token = jwt.sign(
-      { id: account.id, accountNumber: account.accountNumber },
-      JWT_SECRET,
-      { expiresIn: "2h" }
-    );
-
-    res.status(200).json({
-      message: "Login successful",
-      token,
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ message: "Server error during login" });
+    const token = jwt.sign({ id: acc.id, accountNumber: acc.accountNumber }, JWT_SECRET, { expiresIn: '3h' });
+    res.json({ message: 'Login successful', token });
+  } catch (err) {
+    console.error('login error', err.message);
+    res.status(500).json({ message: 'Server error during login' });
   }
 };
 
-// ✅ DEPOSIT
 exports.deposit = async (req, res) => {
   try {
+    const accountNumber = req.user.accountNumber;
     const { amount } = req.body;
-    const accountNumber = req.user?.accountNumber;
-
-    if (!accountNumber) {
-      return res.status(401).json({ message: "Unauthorized: Account number not found in token" });
-    }
-
-    if (!amount || amount <= 0) {
-      return res.status(400).send("Invalid amount");
-    }
-
-    // ✅ verify account exists
-    const existing = await prisma.account.findUnique({
-      where: { accountNumber },
-    });
-
-    if (!existing) {
-      return res.status(404).send("Account not found");
-    }
+    const amt = Number(amount);
+    if (!amt || amt <= 0) return res.status(400).json({ message: 'Invalid amount' });
 
     const updated = await prisma.account.update({
       where: { accountNumber },
-      data: { balance: { increment: parseFloat(amount) } },
+      data: { balance: { increment: amt } }
     });
 
-    await prisma.transaction.create({
-      data: {
-        accountNumber,
-        type: "deposit",
-        amount: parseFloat(amount),
-      },
-    });
+    await prisma.transaction.create({ data: { accountNumber, type: 'deposit', amount: amt } });
 
-    res.json({
-      message: `Deposited ₹${amount}`,
-      newBalance: updated.balance,
-    });
-  } catch (error) {
-    console.error("Deposit error:", error);
-    res.status(500).send("Server error during deposit");
+    pub.publish('transactionEvents', JSON.stringify({ accountNumber, type: 'deposit', amount: amt, balance: updated.balance }));
+
+    res.json({ message: `Deposited ₹${amt}`, balance: updated.balance });
+  } catch (err) {
+    console.error('deposit error', err.message);
+    res.status(500).json({ message: 'Server error during deposit' });
   }
 };
 
-// ✅ WITHDRAW
 exports.withdraw = async (req, res) => {
   try {
+    const accountNumber = req.user.accountNumber;
     const { amount } = req.body;
-    const accountNumber = req.user?.accountNumber;
+    const amt = Number(amount);
+    if (!amt || amt <= 0) return res.status(400).json({ message: 'Invalid amount' });
 
-    if (!accountNumber) {
-      return res.status(401).json({ message: "Unauthorized: Account number not found in token" });
-    }
+    const acc = await prisma.account.findUnique({ where: { accountNumber } });
+    if (!acc || acc.balance < amt) return res.status(400).json({ message: 'Insufficient balance' });
 
-    if (!amount || amount <= 0) {
-      return res.status(400).send("Invalid amount");
-    }
+    const updated = await prisma.account.update({ where: { accountNumber }, data: { balance: { decrement: amt } } });
 
-    const account = await prisma.account.findUnique({
-      where: { accountNumber },
-    });
+    await prisma.transaction.create({ data: { accountNumber, type: 'withdraw', amount: amt } });
 
-    if (!account || account.balance < parseFloat(amount)) {
-      return res.status(400).send("Insufficient balance");
-    }
+    pub.publish('transactionEvents', JSON.stringify({ accountNumber, type: 'withdraw', amount: amt, balance: updated.balance }));
 
-    const updated = await prisma.account.update({
-      where: { accountNumber },
-      data: { balance: { decrement: parseFloat(amount) } },
-    });
-
-    await prisma.transaction.create({
-      data: {
-        accountNumber,
-        type: "withdraw",
-        amount: parseFloat(amount),
-      },
-    });
-
-    res.json({
-      message: `Withdrawn ₹${amount}`,
-      remainingBalance: updated.balance,
-    });
-  } catch (error) {
-    console.error("Withdraw error:", error);
-    res.status(500).send("Server error during withdrawal");
+    res.json({ message: `Withdrawn ₹${amt}`, balance: updated.balance });
+  } catch (err) {
+    console.error('withdraw error', err.message);
+    res.status(500).json({ message: 'Server error during withdrawal' });
   }
 };
 
-// ✅ TRANSFER
 exports.transfer = async (req, res) => {
   try {
+    const from = req.user.accountNumber;
     const { toAccountNumber, amount } = req.body;
-    const fromAccountNumber = req.user?.accountNumber;
+    const amt = Number(amount);
+    if (!toAccountNumber || !amt || amt <= 0) return res.status(400).json({ message: 'Invalid toAccount or amount' });
+    if (from === toAccountNumber) return res.status(400).json({ message: 'Cannot transfer to same account' });
 
-    if (!fromAccountNumber) {
-      return res.status(401).json({ message: "Unauthorized: Account number not found in token" });
+    // atomically check sender balance, decrement sender, increment recipient, and create transaction
+    const result = await prisma.$transaction(async (prismaTx) => {
+      const sender = await prismaTx.account.findUnique({ where: { accountNumber: from } });
+      if (!sender || sender.balance < amt) throw new Error('Insufficient balance');
+
+      const recipient = await prismaTx.account.findUnique({ where: { accountNumber: toAccountNumber } });
+      if (!recipient) throw new Error('Recipient not found');
+
+      const updatedSender = await prismaTx.account.update({
+        where: { accountNumber: from },
+        data: { balance: { decrement: amt } }
+      });
+
+      const updatedRecipient = await prismaTx.account.update({
+        where: { accountNumber: toAccountNumber },
+        data: { balance: { increment: amt } }
+      });
+
+      const txRecord = await prismaTx.transaction.create({
+        data: { accountNumber: from, type: 'transfer', amount: amt, toAccount: toAccountNumber }
+      });
+
+      return { updatedSender, updatedRecipient, txRecord, recipientName: recipient.name };
+    });
+
+    // publish once transaction succeeded
+    pub.publish('transactionEvents', JSON.stringify({
+      from,
+      toAccountNumber,
+      type: 'transfer',
+      amount: amt,
+      balanceTo: result.updatedRecipient.balance
+    }));
+
+    res.json({ message: `Transferred ₹${amt} to ${result.recipientName}` });
+  } catch (err) {
+    console.error('transfer error', err.message);
+    // surface friendly errors
+    if (err.message === 'Insufficient balance' || err.message === 'Recipient not found') {
+      return res.status(400).json({ message: err.message });
     }
-
-    if (!toAccountNumber || !amount || amount <= 0) {
-      return res.status(400).send("Invalid recipient account or amount");
-    }
-
-    if (fromAccountNumber === toAccountNumber) {
-      return res.status(400).send("Cannot transfer to same account");
-    }
-
-    const fromAccount = await prisma.account.findUnique({
-      where: { accountNumber: fromAccountNumber },
-    });
-
-    if (!fromAccount || fromAccount.balance < parseFloat(amount)) {
-      return res.status(400).send("Insufficient balance");
-    }
-
-    const toAccount = await prisma.account.findUnique({
-      where: { accountNumber: toAccountNumber },
-    });
-
-    if (!toAccount) {
-      return res.status(404).send("Recipient account not found");
-    }
-
-    await prisma.account.update({
-      where: { accountNumber: fromAccountNumber },
-      data: { balance: { decrement: parseFloat(amount) } },
-    });
-
-    const updatedToAccount = await prisma.account.update({
-      where: { accountNumber: toAccountNumber },
-      data: { balance: { increment: parseFloat(amount) } },
-    });
-
-    await prisma.transaction.create({
-      data: {
-        accountNumber: fromAccountNumber,
-        type: "transfer",
-        amount: parseFloat(amount),
-        toAccount: toAccountNumber,
-      },
-    });
-
-    res.json({
-      message: `Transferred ₹${amount} to ${toAccount.name}`,
-      remainingBalance: fromAccount.balance - parseFloat(amount),
-    });
-  } catch (error) {
-    console.error("Transfer error:", error);
-    res.status(500).send("Server error during transfer");
+    res.status(500).json({ message: 'Server error during transfer' });
   }
 };
 
-// ✅ UPDATE PIN
 exports.updatePin = async (req, res) => {
   try {
+    const accountNumber = req.user.accountNumber;
     const { newPin } = req.body;
-    const accountNumber = req.user?.accountNumber;
+    if (!newPin) return res.status(400).json({ message: 'New PIN required' });
 
-    if (!accountNumber) {
-      return res.status(401).json({ message: "Unauthorized: Account number not found in token" });
-    }
+    const hashed = await bcrypt.hash(String(newPin), 10);
+    await prisma.account.update({ where: { accountNumber }, data: { pin: hashed } });
 
-    if (!newPin) {
-      return res.status(400).send("New PIN is required");
-    }
-
-    const hashedNewPin = await bcrypt.hash(newPin, 10);
-
-    await prisma.account.update({
-      where: { accountNumber },
-      data: { pin: hashedNewPin },
-    });
-
-    res.json({ message: "PIN updated successfully" });
-  } catch (error) {
-    console.error("Update PIN error:", error);
-    res.status(500).send("Server error updating PIN");
+    res.json({ message: 'PIN updated' });
+  } catch (err) {
+    console.error('updatePin error', err.message);
+    res.status(500).json({ message: 'Server error updating PIN' });
   }
 };
 
-// ✅ GET TRANSACTION HISTORY
-exports.getTransactionHistory = async (req, res) => {
-  try {
-    const accountNumber = req.user?.accountNumber;
-
-    if (!accountNumber) {
-      return res.status(401).json({ message: "Unauthorized: Account number not found in token" });
-    }
-
-    const transactions = await prisma.transaction.findMany({
-      where: { accountNumber },
-      orderBy: { date: 'desc' },
-    });
-
-    res.json(transactions);
-  } catch (error) {
-    console.error("Get transaction history error:", error);
-    res.status(500).send("Server error fetching transaction history");
-  }
-};
-
-// ✅ DELETE ACCOUNT
 exports.deleteAccount = async (req, res) => {
   try {
-    const accountNumber = req.user?.accountNumber;
+    const accountNumber = req.user.accountNumber;
 
-    if (!accountNumber) {
-      return res.status(401).json({ message: "Unauthorized: Account number not found in token" });
-    }
+    await prisma.transaction.deleteMany({ where: { accountNumber } });
+    await prisma.account.delete({ where: { accountNumber } });
 
-    const account = await prisma.account.findUnique({
-      where: { accountNumber },
-    });
+    pub.publish('transactionEvents', JSON.stringify({ accountNumber, type: 'accountDeleted' }));
 
-    if (!account) {
-      return res.status(404).send("Account not found");
-    }
+    res.json({ message: 'Account deleted' });
+  } catch (err) {
+    console.error('deleteAccount error', err.message);
+    res.status(500).json({ message: 'Server error deleting account' });
+  }
+};
 
-    await prisma.transaction.deleteMany({
-      where: { accountNumber },
-    });
-
-    await prisma.account.delete({
-      where: { accountNumber },
-    });
-
-    res.json({ message: "Account deleted successfully" });
-  } catch (error) {
-    console.error("Delete account error:", error);
-    res.status(500).send("Server error deleting account");
+exports.getTransactionHistory = async (req, res) => {
+  try {
+    const accountNumber = req.user.accountNumber;
+    const history = await prisma.transaction.findMany({ where: { accountNumber }, orderBy: { date: 'desc' } });
+    res.json(history);
+  } catch (err) {
+    console.error('history error', err.message);
+    res.status(500).json({ message: 'Server error fetching history' });
   }
 };

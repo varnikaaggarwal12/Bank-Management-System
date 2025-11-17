@@ -10,7 +10,7 @@ datasource db {
 model Account {
   id             Int           @id @default(autoincrement())
   name           String
-  accountNumber  String        @unique   // ✅ Must be unique
+  accountNumber  String        @unique
   pin            String
   balance        Float         @default(0)
   transactions   Transaction[]
@@ -25,4 +25,3 @@ model Transaction {
   toAccount     String?
   account       Account? @relation(fields: [accountNumber], references: [accountNumber])
 }
-

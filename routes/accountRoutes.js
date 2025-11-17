@@ -1,18 +1,17 @@
-const express = require("express");
+// routes/accountRoutes.js
+const express = require('express');
 const router = express.Router();
-const accountController = require("../controllers/accountController");
-const authMiddleware = require("../middleware/authMiddleware");
+const account = require('../controllers/accountController');
+const auth = require('../middleware/authMiddleware');
 
-// Public routes
-router.post("/open", accountController.openAccount);
-router.post("/login", accountController.login);
+router.post('/open', account.openAccount);
+router.post('/login', account.login);
 
-// Protected routes
-router.post("/deposit", authMiddleware, accountController.deposit);
-router.post("/withdraw", authMiddleware, accountController.withdraw);
-router.post("/transfer", authMiddleware, accountController.transfer);
-router.post("/update-pin", authMiddleware, accountController.updatePin);
-router.get("/transaction-history", authMiddleware, accountController.getTransactionHistory);
-router.post("/delete", authMiddleware, accountController.deleteAccount);
+router.post('/deposit', auth, account.deposit);
+router.post('/withdraw', auth, account.withdraw);
+router.post('/transfer', auth, account.transfer);
+router.post('/update-pin', auth, account.updatePin);
+router.post('/delete', auth, account.deleteAccount);
+router.get('/transaction-history', auth, account.getTransactionHistory);
 
 module.exports = router;

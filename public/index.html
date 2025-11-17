@@ -1,292 +1,159 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
   <title>Banking App</title>
-  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --primary: #4A90E2;
+      --primary-hover: #357ACD;
+      --text: #333;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      margin: 0;
+      padding: 30px;
+      color: var(--text);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      font-weight: 600;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: auto;
+    }
+
+    .section {
+      background: var(--card);
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.07);
+      transition: 0.3s;
+    }
+
+    .section:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    }
+
+    h3 {
+      margin: 0 0 12px;
+      font-weight: 600;
+    }
+
+    input {
+      width: 95%;
+      padding: 10px;
+      margin: 6px 0;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      transition: 0.2s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 4px var(--primary);
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 6px 4px 6px 0;
+      font-weight: 600;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: var(--primary-hover);
+      transform: scale(1.05);
+    }
+
+    #history {
+      padding-left: 20px;
+    }
+
+    #events {
+      background: #eee;
+      padding: 12px;
+      height: 150px;
+      overflow-y: auto;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+  </style>
 </head>
+
 <body>
+  <h1>💳 Banking App Dashboard</h1>
+
   <div class="container">
-    <h1>Welcome to Our Bank</h1>
-    <p>Please choose an option below to proceed:</p>
 
-    <!-- Navigation Buttons -->
-    <div class="options">
-      <button onclick="showSection('login')">Login</button>
-      <button onclick="showSection('open')">Open Account</button>
-      <button onclick="showSection('deposit')">Deposit</button>
-      <button onclick="showSection('withdraw')">Withdraw</button>
-      <button onclick="showSection('transfer')">Transfer</button>
-      <button onclick="showSection('update')">Update PIN</button>
-      <button onclick="showSection('delete')">Delete Account</button>
-      <button onclick="showSection('history')">Transaction History</button>
-    </div>
-
-    <!-- Sections -->
-    <div id="login" class="section">
-      <h2>Login</h2>
-      <input id="loginAcc" placeholder="Account Number">
-      <input id="loginPin" placeholder="PIN" type="password">
-      <button onclick="login()">Login</button>
-    </div>
-
-    <div id="open" class="section">
-      <h2>Open Account</h2>
-      <input id="name" placeholder="Name">
-      <input id="pin" placeholder="PIN" type="password">
+    <!-- Open Account -->
+    <div class="section">
+      <h3>🆕 Open New Account</h3>
+      <input id="name" placeholder="Full Name" />
+      <input id="pin" placeholder="4-digit PIN" type="password" />
       <button onclick="openAccount()">Open Account</button>
     </div>
 
-    <div id="deposit" class="section">
-      <h2>Deposit</h2>
-      <input id="depAmt" placeholder="Amount" type="number">
+    <!-- Login -->
+    <div class="section">
+      <h3>🔐 Login</h3>
+      <input id="loginAcc" placeholder="Account Number" />
+      <input id="loginPin" placeholder="PIN" type="password" />
+      <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+      <h3>💰 Banking Actions (Login Required)</h3>
+
+      <input id="amount" placeholder="Amount" type="number" />
       <button onclick="deposit()">Deposit</button>
-    </div>
-
-    <div id="withdraw" class="section">
-      <h2>Withdraw</h2>
-      <input id="withAmt" placeholder="Amount" type="number">
       <button onclick="withdraw()">Withdraw</button>
-    </div>
 
-    <div id="transfer" class="section">
-      <h2>Transfer</h2>
-      <input id="toAcc" placeholder="To Account Number">
-      <input id="transAmt" placeholder="Amount" type="number">
+      <br/><br/>
+
+      <input id="toAcc" placeholder="Transfer To Account" />
       <button onclick="transfer()">Transfer</button>
+
+      <br/><br/>
+
+      <button onclick="getHistory()">View My Transactions</button>
+
+      <ul id="history"></ul>
     </div>
 
-    <div id="update" class="section">
-      <h2>Update PIN</h2>
-      <input id="newPin" placeholder="New PIN" type="password">
-      <button onclick="updatePin()">Update PIN</button>
+    <!-- Socket -->
+    <div class="section">
+      <h3>📡 Real-Time Events</h3>
+      <button onclick="connectSocket()">Connect WebSocket</button>
+      <button onclick="joinRoom()">Join My Account Room</button>
+
+      <pre id="events"></pre>
     </div>
 
-    <div id="delete" class="section">
-      <h2>Delete Account</h2>
-      <button onclick="deleteAccount()">Delete Account</button>
-    </div>
-
-    <div id="history" class="section">
-      <h2>Transaction History</h2>
-      <ul id="transList"></ul>
-      <p id="transError" style="color:red;"></p>
-    </div>
   </div>
 
-  <script>
-    let token = ''; // JWT token stored after login
-    const ACCOUNT_API = '/api/accounts';  // ✅ account routes
-    const AUTH_API = '/api/auth';         // ✅ auth routes
-
-    // Show only selected section
-    function showSection(id) {
-      document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
-      if (id) {
-        document.getElementById(id).style.display = 'block';
-        if (id === 'history') getTransactions();
-      }
-    }
-
-    // ✅ Login (uses /api/auth/login)
-    async function login() {
-      const accountNumber = document.getElementById('loginAcc').value.trim();
-      const pin = document.getElementById('loginPin').value.trim();
-
-      if (!accountNumber || !pin) {
-        alert('Please enter both account number and PIN');
-        return;
-      }
-
-      try {
-        const res = await fetch(`${AUTH_API}/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accountNumber, pin })
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          alert('❌ Login failed: ' + data.message);
-          return;
-        }
-
-        token = data.token;
-        alert('✅ Login successful!');
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-
-    // ✅ Open Account (uses /api/accounts/open)
-    async function openAccount() {
-      const name = document.getElementById('name').value.trim();
-      const pin = document.getElementById('pin').value.trim();
-
-      if (!name || !pin) {
-        alert('Please enter both name and PIN');
-        return;
-      }
-
-      try {
-        const res = await fetch(`${ACCOUNT_API}/open`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, pin })
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          alert('❌ ' + data.message);
-          return;
-        }
-
-        alert(`✅ Account created successfully!\nYour Account Number: ${data.accountNumber}`);
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-
-    // ✅ Deposit
-    async function deposit() {
-      if (!token) return alert('Please login first');
-      const amount = document.getElementById('depAmt').value;
-
-      try {
-        const res = await fetch(`${ACCOUNT_API}/deposit`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({ amount })
-        });
-        alert(await res.text());
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-
-    // ✅ Withdraw
-    async function withdraw() {
-      if (!token) return alert('Please login first');
-      const amount = document.getElementById('withAmt').value;
-
-      try {
-        const res = await fetch(`${ACCOUNT_API}/withdraw`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({ amount })
-        });
-        alert(await res.text());
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-
-    // ✅ Transfer
-    async function transfer() {
-      if (!token) return alert('Please login first');
-      const toAccountNumber = document.getElementById('toAcc').value;
-      const amount = document.getElementById('transAmt').value;
-
-      try {
-        const res = await fetch(`${ACCOUNT_API}/transfer`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({ toAccountNumber, amount })
-        });
-        alert(await res.text());
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-
-    // ✅ Update PIN
-    async function updatePin() {
-      if (!token) return alert('Please login first');
-      const newPin = document.getElementById('newPin').value;
-
-      try {
-        const res = await fetch(`${ACCOUNT_API}/update-pin`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({ newPin })
-        });
-        alert(await res.text());
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-
-    // ✅ Delete Account
-    async function deleteAccount() {
-      if (!token) return alert('Please login first');
-      try {
-        const res = await fetch(`${ACCOUNT_API}/delete`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          }
-        });
-        alert(await res.text());
-        token = ''; // clear session
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-
-    // ✅ Transaction History
-    async function getTransactions() {
-      if (!token) return alert('Please login first');
-
-      const list = document.getElementById('transList');
-      const errorEl = document.getElementById('transError');
-      list.innerHTML = '';
-      errorEl.textContent = '';
-
-      try {
-        const res = await fetch('/api/transactions', {
-          headers: { 'Authorization': 'Bearer ' + token }
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          errorEl.textContent = 'Error: ' + text;
-          return;
-        }
-
-        const data = await res.json();
-
-        if (!data.length) {
-          list.innerHTML = '<li>No transactions found</li>';
-          return;
-        }
-
-        data.forEach(t => {
-          const li = document.createElement('li');
-          li.textContent = `${new Date(t.date).toLocaleString()} - ${t.type.toUpperCase()} - ${t.amount}${t.toAccount ? ' → ' + t.toAccount : ''}`;
-          list.appendChild(li);
-        });
-      } catch (err) {
-        errorEl.textContent = 'Error: ' + err.message;
-      }
-    }
-
-    // Hide all sections initially
-    showSection('');
-  </script>
+  <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

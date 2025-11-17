@@ -5,7 +5,7 @@ const { PrismaClient } = require("@prisma/client");
 const router = express.Router();
 const prisma = new PrismaClient();
 
-const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
+const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey";
 
 // ✅ Register a new account
 router.post("/register", async (req, res) => {
@@ -36,7 +36,7 @@ router.post("/login", async (req, res) => {
     if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
     const token = jwt.sign(
-      { id: account.id, name: account.name },
+      { id: account.id, accountNumber: account.accountNumber },
       JWT_SECRET,
       { expiresIn: "1h" }
     );

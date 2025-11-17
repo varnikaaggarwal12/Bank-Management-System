@@ -1,8 +1,13 @@
-const Transaction = require('../models/Transaction');
+const { prisma } = require('../config/db');
 
+// Get all transactions for an account
 exports.getTransactions = async (req, res) => {
   try {
-    const transactions = await Transaction.find({ accountNumber: req.account.accountNumber }).sort({ date: -1 });
+    const { accountNumber } = req.params;
+    const transactions = await prisma.transaction.findMany({
+      where: { accountNumber },
+      orderBy: { date: 'desc' },
+    });
     res.json(transactions);
   } catch (err) {
     res.status(500).send(err.message);

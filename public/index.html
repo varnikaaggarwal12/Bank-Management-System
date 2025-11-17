@@ -26,39 +26,39 @@
     <div id="login" class="section">
       <h2>Login</h2>
       <input id="loginAcc" placeholder="Account Number">
-      <input id="loginPin" placeholder="PIN">
+      <input id="loginPin" placeholder="PIN" type="password">
       <button onclick="login()">Login</button>
     </div>
 
     <div id="open" class="section">
       <h2>Open Account</h2>
       <input id="name" placeholder="Name">
-      <input id="pin" placeholder="PIN">
+      <input id="pin" placeholder="PIN" type="password">
       <button onclick="openAccount()">Open Account</button>
     </div>
 
     <div id="deposit" class="section">
       <h2>Deposit</h2>
-      <input id="depAmt" placeholder="Amount">
+      <input id="depAmt" placeholder="Amount" type="number">
       <button onclick="deposit()">Deposit</button>
     </div>
 
     <div id="withdraw" class="section">
       <h2>Withdraw</h2>
-      <input id="withAmt" placeholder="Amount">
+      <input id="withAmt" placeholder="Amount" type="number">
       <button onclick="withdraw()">Withdraw</button>
     </div>
 
     <div id="transfer" class="section">
       <h2>Transfer</h2>
       <input id="toAcc" placeholder="To Account Number">
-      <input id="transAmt" placeholder="Amount">
+      <input id="transAmt" placeholder="Amount" type="number">
       <button onclick="transfer()">Transfer</button>
     </div>
 
     <div id="update" class="section">
       <h2>Update PIN</h2>
-      <input id="newPin" placeholder="New PIN">
+      <input id="newPin" placeholder="New PIN" type="password">
       <button onclick="updatePin()">Update PIN</button>
     </div>
 
@@ -76,71 +76,92 @@
 
   <script>
     let token = ''; // JWT token stored after login
-    const API = '/api/account';
+    const ACCOUNT_API = '/api/accounts';  // ✅ account routes
+    const AUTH_API = '/api/auth';         // ✅ auth routes
 
     // Show only selected section
     function showSection(id) {
       document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
       if (id) {
         document.getElementById(id).style.display = 'block';
-
-        // Load transactions if history section
         if (id === 'history') getTransactions();
       }
     }
 
-    // Login
+    // ✅ Login (uses /api/auth/login)
     async function login() {
-      const accountNumber = document.getElementById('loginAcc').value;
-      const pin = document.getElementById('loginPin').value;
+      const accountNumber = document.getElementById('loginAcc').value.trim();
+      const pin = document.getElementById('loginPin').value.trim();
+
+      if (!accountNumber || !pin) {
+        alert('Please enter both account number and PIN');
+        return;
+      }
 
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(`${AUTH_API}/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accountNumber, pin })
         });
 
+        const data = await res.json();
+
         if (!res.ok) {
-          const text = await res.text();
-          alert('Login failed: ' + text);
+          alert('❌ Login failed: ' + data.message);
           return;
         }
 
-        const data = await res.json();
         token = data.token;
-        alert('Login successful');
+        alert('✅ Login successful!');
       } catch (err) {
         alert('Error: ' + err.message);
       }
     }
 
-    // Open Account
+    // ✅ Open Account (uses /api/accounts/open)
     async function openAccount() {
+      const name = document.getElementById('name').value.trim();
+      const pin = document.getElementById('pin').value.trim();
+
+      if (!name || !pin) {
+        alert('Please enter both name and PIN');
+        return;
+      }
+
       try {
-        const res = await fetch(`${API}/open`, {
+        const res = await fetch(`${ACCOUNT_API}/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: document.getElementById('name').value,
-            pin: document.getElementById('pin').value
-          })
+          body: JSON.stringify({ name, pin })
         });
-        const msg = await res.text();
-        alert(msg);
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert('❌ ' + data.message);
+          return;
+        }
+
+        alert(`✅ Account created successfully!\nYour Account Number: ${data.accountNumber}`);
       } catch (err) {
         alert('Error: ' + err.message);
       }
     }
 
-    // Deposit
+    // ✅ Deposit
     async function deposit() {
       if (!token) return alert('Please login first');
+      const amount = document.getElementById('depAmt').value;
+
       try {
-        const res = await fetch(`${API}/deposit`, {
+        const res = await fetch(`${ACCOUNT_API}/deposit`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ amount: document.getElementById('depAmt').value })
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ amount })
         });
         alert(await res.text());
       } catch (err) {
@@ -148,14 +169,19 @@
       }
     }
 
-    // Withdraw
+    // ✅ Withdraw
     async function withdraw() {
       if (!token) return alert('Please login first');
+      const amount = document.getElementById('withAmt').value;
+
       try {
-        const res = await fetch(`${API}/withdraw`, {
+        const res = await fetch(`${ACCOUNT_API}/withdraw`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ amount: document.getElementById('withAmt').value })
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ amount })
         });
         alert(await res.text());
       } catch (err) {
@@ -163,17 +189,20 @@
       }
     }
 
-    // Transfer
+    // ✅ Transfer
     async function transfer() {
       if (!token) return alert('Please login first');
+      const toAccountNumber = document.getElementById('toAcc').value;
+      const amount = document.getElementById('transAmt').value;
+
       try {
-        const res = await fetch(`${API}/transfer`, {
+        const res = await fetch(`${ACCOUNT_API}/transfer`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({
-            toAccountNumber: document.getElementById('toAcc').value,
-            amount: document.getElementById('transAmt').value
-          })
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ toAccountNumber, amount })
         });
         alert(await res.text());
       } catch (err) {
@@ -181,14 +210,19 @@
       }
     }
 
-    // Update PIN
+    // ✅ Update PIN
     async function updatePin() {
       if (!token) return alert('Please login first');
+      const newPin = document.getElementById('newPin').value;
+
       try {
-        const res = await fetch(`${API}/update-pin`, {
+        const res = await fetch(`${ACCOUNT_API}/update-pin`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ newPin: document.getElementById('newPin').value })
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ newPin })
         });
         alert(await res.text());
       } catch (err) {
@@ -196,22 +230,25 @@
       }
     }
 
-    // Delete Account
+    // ✅ Delete Account
     async function deleteAccount() {
       if (!token) return alert('Please login first');
       try {
-        const res = await fetch(`${API}/delete`, {
+        const res = await fetch(`${ACCOUNT_API}/delete`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          }
         });
         alert(await res.text());
-        token = '';
+        token = ''; // clear session
       } catch (err) {
         alert('Error: ' + err.message);
       }
     }
 
-    // Transaction History
+    // ✅ Transaction History
     async function getTransactions() {
       if (!token) return alert('Please login first');
 
@@ -240,7 +277,7 @@
 
         data.forEach(t => {
           const li = document.createElement('li');
-          li.textContent = `${new Date(t.date).toLocaleString()} - ${t.type.toUpperCase()} - ${t.amount}${t.toAccount ? ' to ' + t.toAccount : ''}`;
+          li.textContent = `${new Date(t.date).toLocaleString()} - ${t.type.toUpperCase()} - ${t.amount}${t.toAccount ? ' → ' + t.toAccount : ''}`;
           list.appendChild(li);
         });
       } catch (err) {

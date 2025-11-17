@@ -1,104 +1,38 @@
-const Account = require('../models/Account');
-const Transaction = require('../models/Transaction');
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+require("dotenv").config();
 
-// Open Account
+const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey"; // fallback if .env missing
+
+// ✅ OPEN ACCOUNT
 exports.openAccount = async (req, res) => {
   try {
     const { name, pin } = req.body;
-    const account = new Account({ name, pin });
-    await account.save();
-    res.send(`Account created. Your Account Number: ${account.accountNumber}`);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
 
-// Deposit
-exports.deposit = async (req, res) => {
-  try {
-    const { amount } = req.body;
-    req.account.balance += Number(amount);
-    await req.account.save();
+    if (!name || !pin) {
+      return res.status(400).json({ message: "Name and PIN are required" });
+    }
 
-    await Transaction.create({
-      accountNumber: req.account.accountNumber,
-      type: 'deposit',
-      amount
+    const accountNumber = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedPin = await bcrypt.hash(pin, 10);
+
+    const account = await prisma.account.create({
+      data: {
+        name: name.trim(),
+        accountNumber,
+        pin: hashedPin,
+        balance: 0,
+      },
     });
 
-    res.send(`Deposited ${amount}. New Balance: ${req.account.balance}`);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
-
-// Withdraw
-exports.withdraw = async (req, res) => {
-  try {
-    const { amount } = req.body;
-    if (req.account.balance < amount) return res.status(400).send('Insufficient balance');
-
-    req.account.balance -= Number(amount);
-    await req.account.save();
-
-    await Transaction.create({
-      accountNumber: req.account.accountNumber,
-      type: 'withdraw',
-      amount
+    res.status(201).json({
+      message: "Account created successfully",
+      accountNumber: account.accountNumber,
     });
-
-    res.send(`Withdrew ${amount}. New Balance: ${req.account.balance}`);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
-
-// Transfer
-exports.transfer = async (req, res) => {
-  try {
-    const { toAccountNumber, amount } = req.body;
-    const receiver = await Account.findOne({ accountNumber: toAccountNumber });
-    if (!receiver) return res.status(404).send('Receiver account not found');
-
-    if (req.account.balance < amount) return res.status(400).send('Insufficient balance');
-
-    req.account.balance -= Number(amount);
-    receiver.balance += Number(amount);
-
-    await req.account.save();
-    await receiver.save();
-
-    await Transaction.create({
-      accountNumber: req.account.accountNumber,
-      type: 'transfer',
-      amount,
-      toAccount: toAccountNumber
-    });
-
-    res.send(`Transferred ${amount} to ${toAccountNumber}. Your Balance: ${req.account.balance}`);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
-
-// Update PIN
-exports.updatePin = async (req, res) => {
-  try {
-    const { newPin } = req.body;
-    req.account.pin = newPin;
-    await req.account.save();
-    res.send('PIN updated successfully');
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
-
-// Delete Account
-exports.deleteAccount = async (req, res) => {
-  try {
-    await Account.findOneAndDelete({ accountNumber: req.account.accountNumber });
-    res.send('Account deleted successfully');
-  } catch (err) {
-    res.status(500).send(err.message);
+  } catch (error) {
+    console.error("Error creating account:", error);
+    res.status(500).json({ message: "Server error creating account" });
   }
 };

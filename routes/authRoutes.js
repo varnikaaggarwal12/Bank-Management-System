@@ -41,11 +41,21 @@ router.post("/login", async (req, res) => {
       { expiresIn: "1h" }
     );
 
+    // ✅ FIX — MUST SEND type: "login"
+    await publishToChannel(CHANNELS.AUDIT_EVENTS, {
+      type: "login",
+      accountNumber: account.accountNumber,
+      ip: req.ip,
+      timestamp: new Date().toISOString()
+    });
+
     res.json({ message: "Login successful", token });
+
   } catch (error) {
-    console.error(error);
+    console.error("login error:", error);
     res.status(500).json({ message: "Error logging in" });
   }
 });
+
 
 module.exports = router;

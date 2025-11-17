@@ -60,9 +60,39 @@ async function getHistory() {
 function connectSocket() {
   socket = io();
   const events = document.getElementById('events');
-  socket.on('connect', () => events.textContent += `Connected ${socket.id}\n`);
-  socket.on('transactionUpdate', (data) => events.textContent += `TxUpdate: ${JSON.stringify(data)}\n`);
-  socket.on('transactionEvent', (data) => events.textContent += `Event: ${JSON.stringify(data)}\n`);
+  const queueStats = document.getElementById('queueStats');
+  
+  socket.on('connect', () => {
+    events.textContent += `Connected ${socket.id}\n`;
+    // Request initial queue stats
+    socket.emit('getQueueStats');
+  });
+  
+  socket.on('transactionUpdate', (data) => events.textContent += `📊 TxUpdate: ${JSON.stringify(data)}\n`);
+  socket.on('transactionEvent', (data) => events.textContent += `🔄 Event: ${JSON.stringify(data)}\n`);
+  socket.on('accountEvent', (data) => events.textContent += `👤 Account: ${JSON.stringify(data)}\n`);
+  socket.on('notification', (data) => events.textContent += `🔔 Notification: ${JSON.stringify(data)}\n`);
+  
+  socket.on('queueStats', (stats) => {
+    queueStats.innerHTML = '<h3>📈 Queue Statistics</h3>';
+    Object.entries(stats).forEach(([queueName, stat]) => {
+      queueStats.innerHTML += `
+        <div>
+          <strong>${queueName}:</strong> 
+          Waiting: ${stat.waiting}, 
+          Delayed: ${stat.delayed}, 
+          Failed: ${stat.failed}
+        </div>
+      `;
+    });
+  });
+  
+  // Auto-refresh queue stats every 10 seconds
+  setInterval(() => {
+    if (socket && socket.connected) {
+      socket.emit('getQueueStats');
+    }
+  }, 10000);
 }
 
 function joinRoom() {
@@ -71,4 +101,54 @@ function joinRoom() {
   const accountNumber = payload.accountNumber;
   socket.emit('joinAccount', accountNumber);
   alert('Joined room for account: '+accountNumber);
+}
+
+async function testPubSub() {
+  try {
+    const response = await fetch('/api/queues/publish/notificationEvents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: {
+          type: 'test_notification',
+          message: 'This is a test notification',
+          timestamp: new Date().toISOString()
+        }
+      })
+    });
+    const result = await response.json();
+    alert('Test message published: ' + JSON.stringify(result));
+  } catch (err) {
+    alert('Error testing pub/sub: ' + err.message);
+  }
+}
+
+async function testQueue() {
+  try {
+    const response = await fetch('/api/queues/enqueue/emailQueue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobData: {
+          type: 'test_email',
+          recipient: 'test@example.com',
+          subject: 'Test Email from Queue System'
+        }
+      })
+    });
+    const result = await response.json();
+    alert('Test job enqueued: ' + JSON.stringify(result));
+  } catch (err) {
+    alert('Error testing queue: ' + err.message);
+  }
+}
+
+async function getQueueHealth() {
+  try {
+    const response = await fetch('/api/queues/health');
+    const health = await response.json();
+    alert('Queue Health: ' + JSON.stringify(health, null, 2));
+  } catch (err) {
+    alert('Error getting queue health: ' + err.message);
+  }
 }

@@ -8,7 +8,7 @@ const path = require('path');
 const { connectDB } = require('./config/db');
 const accountRoutes = require('./routes/accountRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
-const { sub } = require('./services/pubsub'); // ensure pub/sub instantiated
+const { startQueueWorkers, getQueueStats } = require('./services/pubsub'); // ensure pub/sub instantiated
 
 const app = express();
 app.use(express.json());
@@ -17,6 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/accounts', accountRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/queues', require('./routes/queueRoutes'));
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
@@ -41,10 +42,27 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => console.log('Socket disconnected', socket.id));
+  
+  // Handle queue stats request
+  socket.on('getQueueStats', async () => {
+    try {
+      const stats = await getQueueStats();
+      socket.emit('queueStats', stats);
+    } catch (err) {
+      socket.emit('error', { message: 'Failed to get queue stats' });
+    }
+  });
 });
 
 // Connect DB then start
 connectDB().then(() => {
   const PORT = process.env.PORT || 3000;
-  server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+  
+  // Start queue workers
+  startQueueWorkers();
+  
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Queue workers started and monitoring`);
+  });
 }).catch(err => console.error(err));

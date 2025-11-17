@@ -76,92 +76,74 @@
 
   <script>
     let token = ''; // JWT token stored after login
-    const ACCOUNT_API = '/api/accounts';  // ✅ account routes
-    const AUTH_API = '/api/auth';         // ✅ auth routes
+    const API = '/api/accounts'; // ✅ Correct plural route
 
     // Show only selected section
     function showSection(id) {
       document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
       if (id) {
         document.getElementById(id).style.display = 'block';
+
+        // Load transactions if history section
         if (id === 'history') getTransactions();
       }
     }
 
-    // ✅ Login (uses /api/auth/login)
+    // Login
     async function login() {
-      const accountNumber = document.getElementById('loginAcc').value.trim();
-      const pin = document.getElementById('loginPin').value.trim();
-
-      if (!accountNumber || !pin) {
-        alert('Please enter both account number and PIN');
-        return;
-      }
+      const accountNumber = document.getElementById('loginAcc').value;
+      const pin = document.getElementById('loginPin').value;
 
       try {
-        const res = await fetch(`${AUTH_API}/login`, {
+        const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accountNumber, pin })
         });
 
-        const data = await res.json();
-
         if (!res.ok) {
-          alert('❌ Login failed: ' + data.message);
+          const text = await res.text();
+          alert('Login failed: ' + text);
           return;
         }
 
+        const data = await res.json();
         token = data.token;
-        alert('✅ Login successful!');
+        alert('Login successful');
       } catch (err) {
         alert('Error: ' + err.message);
       }
     }
 
-    // ✅ Open Account (uses /api/accounts/open)
+    // Open Account
     async function openAccount() {
-      const name = document.getElementById('name').value.trim();
-      const pin = document.getElementById('pin').value.trim();
-
-      if (!name || !pin) {
-        alert('Please enter both name and PIN');
-        return;
-      }
-
       try {
-        const res = await fetch(`${ACCOUNT_API}/open`, {
+        const res = await fetch(`${API}/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, pin })
+          body: JSON.stringify({
+            name: document.getElementById('name').value,
+            pin: document.getElementById('pin').value
+          })
         });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          alert('❌ ' + data.message);
-          return;
-        }
-
-        alert(`✅ Account created successfully!\nYour Account Number: ${data.accountNumber}`);
+        const msg = await res.text();
+        alert(msg);
       } catch (err) {
         alert('Error: ' + err.message);
       }
     }
 
-    // ✅ Deposit
+    // Deposit
     async function deposit() {
       if (!token) return alert('Please login first');
-      const amount = document.getElementById('depAmt').value;
-
       try {
-        const res = await fetch(`${ACCOUNT_API}/deposit`, {
+        const res = await fetch(`${API}/deposit`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + token
           },
-          body: JSON.stringify({ amount })
+          body: JSON.stringify({ amount: document.getElementById('depAmt').value })
         });
         alert(await res.text());
       } catch (err) {
@@ -169,19 +151,17 @@
       }
     }
 
-    // ✅ Withdraw
+    // Withdraw
     async function withdraw() {
       if (!token) return alert('Please login first');
-      const amount = document.getElementById('withAmt').value;
-
       try {
-        const res = await fetch(`${ACCOUNT_API}/withdraw`, {
+        const res = await fetch(`${API}/withdraw`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + token
           },
-          body: JSON.stringify({ amount })
+          body: JSON.stringify({ amount: document.getElementById('withAmt').value })
         });
         alert(await res.text());
       } catch (err) {
@@ -189,20 +169,20 @@
       }
     }
 
-    // ✅ Transfer
+    // Transfer
     async function transfer() {
       if (!token) return alert('Please login first');
-      const toAccountNumber = document.getElementById('toAcc').value;
-      const amount = document.getElementById('transAmt').value;
-
       try {
-        const res = await fetch(`${ACCOUNT_API}/transfer`, {
+        const res = await fetch(`${API}/transfer`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + token
           },
-          body: JSON.stringify({ toAccountNumber, amount })
+          body: JSON.stringify({
+            toAccountNumber: document.getElementById('toAcc').value,
+            amount: document.getElementById('transAmt').value
+          })
         });
         alert(await res.text());
       } catch (err) {
@@ -210,19 +190,17 @@
       }
     }
 
-    // ✅ Update PIN
+    // Update PIN
     async function updatePin() {
       if (!token) return alert('Please login first');
-      const newPin = document.getElementById('newPin').value;
-
       try {
-        const res = await fetch(`${ACCOUNT_API}/update-pin`, {
+        const res = await fetch(`${API}/update-pin`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + token
           },
-          body: JSON.stringify({ newPin })
+          body: JSON.stringify({ newPin: document.getElementById('newPin').value })
         });
         alert(await res.text());
       } catch (err) {
@@ -230,11 +208,11 @@
       }
     }
 
-    // ✅ Delete Account
+    // Delete Account
     async function deleteAccount() {
       if (!token) return alert('Please login first');
       try {
-        const res = await fetch(`${ACCOUNT_API}/delete`, {
+        const res = await fetch(`${API}/delete`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -242,13 +220,13 @@
           }
         });
         alert(await res.text());
-        token = ''; // clear session
+        token = '';
       } catch (err) {
         alert('Error: ' + err.message);
       }
     }
 
-    // ✅ Transaction History
+    // Transaction History
     async function getTransactions() {
       if (!token) return alert('Please login first');
 
@@ -277,7 +255,7 @@
 
         data.forEach(t => {
           const li = document.createElement('li');
-          li.textContent = `${new Date(t.date).toLocaleString()} - ${t.type.toUpperCase()} - ${t.amount}${t.toAccount ? ' → ' + t.toAccount : ''}`;
+          li.textContent = `${new Date(t.date).toLocaleString()} - ${t.type.toUpperCase()} - ${t.amount}${t.toAccount ? ' to ' + t.toAccount : ''}`;
           list.appendChild(li);
         });
       } catch (err) {

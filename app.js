@@ -27,10 +27,6 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 // expose globally for pubsub to emit
 global.io = io;
-const startConsumer = require("./services/queueConsumer");
-
-// after io is created
-startConsumer(io);
 
 io.on('connection', (socket) => {
   console.log('Socket connected', socket.id);

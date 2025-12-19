@@ -17,7 +17,7 @@ sub.on('message', (channel, message) => {
       if (data.accountNumber) {
         global.io.to(`account:${data.accountNumber}`).emit('transactionUpdate', data);
       }
-      //global.io.emit('transactionEvent', data);
+      global.io.emit('transactionEvent', data);
     }
   } catch (err) {
     console.error('Invalid pubsub message', err);

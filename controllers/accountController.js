@@ -1,12 +1,13 @@
-// controllers/accountController.js
+const { enqueueTransaction } = require("../services/messageQueue");
 const { prisma } = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { pub } = require('../services/pubsub');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+
+// 🔹 Create account
 exports.openAccount = async (req, res) => {
   try {
     const { name, pin } = req.body;
@@ -26,6 +27,8 @@ exports.openAccount = async (req, res) => {
   }
 };
 
+
+// 🔹 Login
 exports.login = async (req, res) => {
   try {
     const { accountNumber, pin } = req.body;
@@ -43,10 +46,13 @@ exports.login = async (req, res) => {
   }
 };
 
+
+// 🔹 Deposit
 exports.deposit = async (req, res) => {
   try {
     const accountNumber = req.user.accountNumber;
     const { amount } = req.body;
+
     const amt = Number(amount);
     if (!amt || amt <= 0) return res.status(400).json({ message: 'Invalid amount' });
 
@@ -55,9 +61,18 @@ exports.deposit = async (req, res) => {
       data: { balance: { increment: amt } }
     });
 
-    await prisma.transaction.create({ data: { accountNumber, type: 'deposit', amount: amt } });
+    // Save transaction
+    await prisma.transaction.create({
+      data: { accountNumber, type: 'deposit', amount: amt }
+    });
 
-    pub.publish('transactionEvents', JSON.stringify({ accountNumber, type: 'deposit', amount: amt, balance: updated.balance }));
+    // Push to queue
+    await enqueueTransaction({
+      event: "DEPOSIT",
+      accountNumber,
+      amount: amt,
+      time: new Date(),
+    });
 
     res.json({ message: `Deposited ₹${amt}`, balance: updated.balance });
   } catch (err) {
@@ -66,21 +81,34 @@ exports.deposit = async (req, res) => {
   }
 };
 
+
+// 🔹 Withdraw
 exports.withdraw = async (req, res) => {
   try {
     const accountNumber = req.user.accountNumber;
     const { amount } = req.body;
+
     const amt = Number(amount);
     if (!amt || amt <= 0) return res.status(400).json({ message: 'Invalid amount' });
 
     const acc = await prisma.account.findUnique({ where: { accountNumber } });
     if (!acc || acc.balance < amt) return res.status(400).json({ message: 'Insufficient balance' });
 
-    const updated = await prisma.account.update({ where: { accountNumber }, data: { balance: { decrement: amt } } });
+    const updated = await prisma.account.update({
+      where: { accountNumber },
+      data: { balance: { decrement: amt } }
+    });
 
-    await prisma.transaction.create({ data: { accountNumber, type: 'withdraw', amount: amt } });
+    await prisma.transaction.create({
+      data: { accountNumber, type: 'withdraw', amount: amt }
+    });
 
-    pub.publish('transactionEvents', JSON.stringify({ accountNumber, type: 'withdraw', amount: amt, balance: updated.balance }));
+    await enqueueTransaction({
+      event: "WITHDRAW",
+      accountNumber,
+      amount: amt,
+      time: new Date(),
+    });
 
     res.json({ message: `Withdrawn ₹${amt}`, balance: updated.balance });
   } catch (err) {
@@ -89,67 +117,86 @@ exports.withdraw = async (req, res) => {
   }
 };
 
+
+// 🔹 Transfer
 exports.transfer = async (req, res) => {
   try {
     const from = req.user.accountNumber;
     const { toAccountNumber, amount } = req.body;
-    const amt = Number(amount);
-    if (!toAccountNumber || !amt || amt <= 0) return res.status(400).json({ message: 'Invalid toAccount or amount' });
-    if (from === toAccountNumber) return res.status(400).json({ message: 'Cannot transfer to same account' });
 
-    // atomically check sender balance, decrement sender, increment recipient, and create transaction
-    const result = await prisma.$transaction(async (prismaTx) => {
-      const sender = await prismaTx.account.findUnique({ where: { accountNumber: from } });
+    const amt = Number(amount);
+    if (!toAccountNumber || !amt || amt <= 0)
+      return res.status(400).json({ message: 'Invalid toAccount or amount' });
+
+    if (from === toAccountNumber)
+      return res.status(400).json({ message: 'Cannot transfer to same account' });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const sender = await tx.account.findUnique({ where: { accountNumber: from } });
       if (!sender || sender.balance < amt) throw new Error('Insufficient balance');
 
-      const recipient = await prismaTx.account.findUnique({ where: { accountNumber: toAccountNumber } });
+      const recipient = await tx.account.findUnique({ where: { accountNumber: toAccountNumber } });
       if (!recipient) throw new Error('Recipient not found');
 
-      const updatedSender = await prismaTx.account.update({
+      const updatedSender = await tx.account.update({
         where: { accountNumber: from },
         data: { balance: { decrement: amt } }
       });
 
-      const updatedRecipient = await prismaTx.account.update({
+      const updatedRecipient = await tx.account.update({
         where: { accountNumber: toAccountNumber },
         data: { balance: { increment: amt } }
       });
 
-      const txRecord = await prismaTx.transaction.create({
-        data: { accountNumber: from, type: 'transfer', amount: amt, toAccount: toAccountNumber }
+      await tx.transaction.create({
+        data: {
+          accountNumber: from,
+          type: 'transfer',
+          amount: amt,
+          toAccount: toAccountNumber
+        }
       });
 
-      return { updatedSender, updatedRecipient, txRecord, recipientName: recipient.name };
+      return { sender, recipient, amount: amt };
     });
 
-    // publish once transaction succeeded
-    pub.publish('transactionEvents', JSON.stringify({
+    // queue event
+    await enqueueTransaction({
+      event: "TRANSFER",
       from,
-      toAccountNumber,
-      type: 'transfer',
+      to: toAccountNumber,
       amount: amt,
-      balanceTo: result.updatedRecipient.balance
-    }));
+      time: new Date(),
+    });
 
-    res.json({ message: `Transferred ₹${amt} to ${result.recipientName}` });
+    res.json({ message: `Transferred ₹${amt} to ${result.recipient.name}` });
+
   } catch (err) {
     console.error('transfer error', err.message);
-    // surface friendly errors
-    if (err.message === 'Insufficient balance' || err.message === 'Recipient not found') {
+
+    if (['Insufficient balance', 'Recipient not found'].includes(err.message)) {
       return res.status(400).json({ message: err.message });
     }
+
     res.status(500).json({ message: 'Server error during transfer' });
   }
 };
 
+
+// 🔹 Update PIN
 exports.updatePin = async (req, res) => {
   try {
     const accountNumber = req.user.accountNumber;
     const { newPin } = req.body;
+
     if (!newPin) return res.status(400).json({ message: 'New PIN required' });
 
     const hashed = await bcrypt.hash(String(newPin), 10);
-    await prisma.account.update({ where: { accountNumber }, data: { pin: hashed } });
+
+    await prisma.account.update({
+      where: { accountNumber },
+      data: { pin: hashed }
+    });
 
     res.json({ message: 'PIN updated' });
   } catch (err) {
@@ -158,6 +205,8 @@ exports.updatePin = async (req, res) => {
   }
 };
 
+
+// 🔹 Delete account
 exports.deleteAccount = async (req, res) => {
   try {
     const accountNumber = req.user.accountNumber;
@@ -165,7 +214,11 @@ exports.deleteAccount = async (req, res) => {
     await prisma.transaction.deleteMany({ where: { accountNumber } });
     await prisma.account.delete({ where: { accountNumber } });
 
-    pub.publish('transactionEvents', JSON.stringify({ accountNumber, type: 'accountDeleted' }));
+    await enqueueTransaction({
+      event: "ACCOUNT_DELETED",
+      accountNumber,
+      time: new Date(),
+    });
 
     res.json({ message: 'Account deleted' });
   } catch (err) {
@@ -174,10 +227,17 @@ exports.deleteAccount = async (req, res) => {
   }
 };
 
+
+// 🔹 Get history
 exports.getTransactionHistory = async (req, res) => {
   try {
     const accountNumber = req.user.accountNumber;
-    const history = await prisma.transaction.findMany({ where: { accountNumber }, orderBy: { date: 'desc' } });
+
+    const history = await prisma.transaction.findMany({
+      where: { accountNumber },
+      orderBy: { date: 'desc' }
+    });
+
     res.json(history);
   } catch (err) {
     console.error('history error', err.message);

@@ -1,50 +1,17 @@
-// index.js
-require('dotenv').config();
-const http = require('http');
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
+// app.js
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
 
-const { connectDB } = require('./config/db');
-const accountRoutes = require('./routes/accountRoutes');
-const transactionRoutes = require('./routes/transactionRoutes');
-const { sub } = require('./services/pubsub'); // ensure pub/sub instantiated
+const accountRoutes = require("./routes/accountRoutes");
+const transactionRoutes = require("./routes/transactionRoutes");
 
 const app = express();
+
 app.use(express.json());
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/api/accounts', accountRoutes);
-app.use('/api/transactions', transactionRoutes);
+app.use("/api/accounts", accountRoutes);
+app.use("/api/transactions", transactionRoutes);
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-
-const server = http.createServer(app);
-
-const { Server } = require('socket.io');
-const io = new Server(server, { cors: { origin: '*' } });
-
-// expose globally for pubsub to emit
-global.io = io;
-
-io.on('connection', (socket) => {
-  console.log('Socket connected', socket.id);
-
-  // join account room if client provides accountNumber after connecting
-  socket.on('joinAccount', (accountNumber) => {
-    if (accountNumber) socket.join(`account:${accountNumber}`);
-  });
-
-  socket.on('leaveAccount', (accountNumber) => {
-    if (accountNumber) socket.leave(`account:${accountNumber}`);
-  });
-
-  socket.on('disconnect', () => console.log('Socket disconnected', socket.id));
-});
-
-// Connect DB then start
-connectDB().then(() => {
-  const PORT = process.env.PORT || 3000;
-  server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-}).catch(err => console.error(err));
+module.exports = app;

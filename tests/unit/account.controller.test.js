@@ -57,7 +57,7 @@ describe("ACCOUNT CONTROLLER – UNIT TESTS", () => {
     jest.clearAllMocks();
   });
 
-  // ✅ OPEN ACCOUNT
+  // OPEN ACCOUNT
   test("openAccount creates new account", async () => {
     bcrypt.hash.mockResolvedValue("hashedPin");
 
@@ -76,7 +76,7 @@ describe("ACCOUNT CONTROLLER – UNIT TESTS", () => {
     );
   });
 
-  // ✅ LOGIN
+  //lOGIn
   test("login returns JWT on success", async () => {
     prisma.account.findUnique.mockResolvedValue({
       id: 1,
@@ -97,7 +97,7 @@ describe("ACCOUNT CONTROLLER – UNIT TESTS", () => {
     );
   });
 
-  // ✅ DEPOSIT
+  //dEPOSIT
   test("deposit updates balance", async () => {
     prisma.account.update.mockResolvedValue({ balance: 1500 });
     prisma.transaction.create.mockResolvedValue({});
@@ -114,7 +114,7 @@ describe("ACCOUNT CONTROLLER – UNIT TESTS", () => {
     );
   });
 
-  // ✅ WITHDRAW
+  // wITHdRAW
   test("withdraw updates balance", async () => {
     prisma.account.findUnique.mockResolvedValue({ balance: 1000 });
     prisma.account.update.mockResolvedValue({ balance: 800 });

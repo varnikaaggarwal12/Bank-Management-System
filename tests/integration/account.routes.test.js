@@ -2,9 +2,6 @@ const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const app = require("../../app");
 
-/**
- * 🔴 MOCK CONTROLLER COMPLETELY
- */
 jest.mock("../../controllers/accountController", () => ({
   deposit: jest.fn((req, res) =>
     res.status(200).json({ balance: 1500 })

@@ -13,7 +13,7 @@ model Account {
   accountNumber  String        @unique
   pin            String
   balance        Float         @default(0)
-  transactions   Transaction[]
+  transactions   Transaction[]  // no fields/references here
 }
 
 model Transaction {
@@ -23,5 +23,6 @@ model Transaction {
   amount        Float
   date          DateTime @default(now())
   toAccount     String?
-  account       Account? @relation(fields: [accountNumber], references: [accountNumber])
+
+  account       Account  @relation(fields: [accountNumber], references: [accountNumber])
 }

@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  backend:
+    build: .
+    container_name: banking_backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    command: node index.js
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: banking_worker
+    env_file:
+      - .env
+    command: node workers/transactionWorker.js
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    container_name: banking_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "@vAAni_09713"
+      POSTGRES_DB: bankdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: banking_redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+    name: banking_pgdata
